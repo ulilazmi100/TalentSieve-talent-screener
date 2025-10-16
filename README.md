@@ -233,9 +233,25 @@ docker compose exec -T postgres psql -U postgres -d talentsieve < ./migrations/d
 
 ---
 
-## Troubleshooting: psql errors & port in use
+## 🧰 Troubleshooting
+- **psql errors & port in use:** If `psql` complains about password or `-f`, run migrations inside the postgres container as shown above. If port 3000 is already in use, either stop the process using it or set `PORT` in `.env` and restart the app.
+- **Port already in use:** Change the `PORT` variable in `.env` or stop the other service.
+- **Postgres password issues:** Run migrations **inside** the container (command above).
+- **Qdrant already exists warnings:** Safe to ignore — indicates the collection is already initialized.
+- **Worker job failed “documents not found”**: Ensure both files were uploaded before calling `/evaluate`.
 
-If `psql` complains about password or `-f`, run migrations inside the postgres container as shown above. If port 3000 is already in use, either stop the process using it or set `PORT` in `.env` and restart the app.
+---
+
+## 🔒 Environment Variables
+
+| Key | Description | Default |
+|-----|--------------|----------|
+| `PORT` | API port | 3000 |
+| `DEMO_MODE` | If `true`, skips real LLM calls | true |
+| `REDIS_URL` | Redis connection string | redis://redis:6379 |
+| `DATABASE_URL` | Postgres connection string | postgres://postgres@postgres:5432/talentsieve |
+| `QDRANT_URL` | Qdrant endpoint | http://qdrant:6333 |
+| `GEMINI_API_KEY` | Gemini API key (required if DEMO_MODE=false) | — |
 
 ---
 
