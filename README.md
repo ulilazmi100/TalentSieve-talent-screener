@@ -193,7 +193,7 @@ Run migrations inside Postgres container (recommended):
 docker compose exec postgres psql -U postgres -d talentsieve -f /app/migrations/up.sql
 ```
 
-### 5. Decode sample PDFs (demo)
+### 5. Decode sample PDFs
 ```bash
 bash scripts/decode_sample_pdfs.sh
 ```
@@ -205,7 +205,7 @@ npm start       # starts API (http://localhost:3000)
 npm run worker  # starts BullMQ worker
 ```
 
-### 7. Run sample job (demo)
+### 7. Run sample job
 ```bash
 bash scripts/run_sample_job.sh
 ```
