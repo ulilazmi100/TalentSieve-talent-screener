@@ -21,12 +21,12 @@ Prereqs:
 4. Migrate DB (UP):
    npm run migrate:up
    OR:
-   docker compose exec postgres psql -U postgres -d postgres -f /app/migrations/up.sql
+   docker compose exec -T postgres psql -U postgres -d talentsieve < ./migrations/up.sql
 
 5. To revert migrations (DOWN):
    npm run migrate:down
 
-6. Decode sample PDFs (for demo):
+6. Decode sample PDFs (to prepare pdf sample especially for demo or not):
    bash scripts/decode_sample_pdfs.sh
 
 7. Start API & Worker (if not running in Docker):
@@ -34,10 +34,11 @@ Prereqs:
    npm run worker
 
 8. Run sample job (requires jq):
-   bash scripts/run_sample_job.sh
+   bash scripts/run_sample_job.sh (can be ran through normal or demo mode)
 
 9. Run tests:
-   DEMO_MODE=true npm test
+   npm test
+   DEMO_MODE=true npm test //for demo mode
 
 Notes:
 - Canonical request keys for `/evaluate` are `job_title`, `cv_id`, and `project_id`. The server accepts common aliases but the canonical shape is recommended.

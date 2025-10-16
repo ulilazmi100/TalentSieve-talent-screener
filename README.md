@@ -190,7 +190,7 @@ docker compose up --build -d
 
 Run migrations inside Postgres container (recommended):
 ```bash
-docker compose exec postgres psql -U postgres -d talentsieve -f /app/migrations/up.sql
+docker compose exec -T postgres psql -U postgres -d talentsieve < ./migrations/up.sql
 ```
 
 ### 5. Decode sample PDFs
@@ -228,7 +228,7 @@ DEMO_MODE=true npm test #with demo mode
 
 ### 10. Revert migrations (DOWN)
 ```bash
-docker compose exec postgres psql -U postgres -d postgres -f /app/migrations/down.sql
+docker compose exec -T postgres psql -U postgres -d talentsieve < ./migrations/down.sql
 ```
 
 ---
