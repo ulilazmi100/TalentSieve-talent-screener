@@ -6,13 +6,30 @@ This project implements a backend service to automate the initial screening of a
 
 Combination of **backend engineering** with **AI workflows**, including prompt design, LLM chaining, retrieval (RAG), and resilience.
 
+This repository demonstrates a complete backend pipeline including PDF parsing, vectorization,
+RAG (retrieval-augmented generation) using Qdrant, LLM calls using Gemini (or other providers),
+and a resilient worker queue with BullMQ + Redis.
+
+-----
+
+
+## Important notes (behavioral / canonical keys)
+- **DEMO_MODE default:** The codebase often runs in demo mode by default (`DEMO_MODE=true`) when the environment variable is not explicitly set. To run against real Postgres/Qdrant/Redis/LLMs, set `DEMO_MODE=false` in your `.env` before starting the API & worker.
+- **Canonical request keys:** The canonical keys for requests are `cv_id` and `project_id`. The server also accepts several common aliases (e.g., `cv_doc_id`, `cvDocId`, `projectId`, `report_doc_id`) for convenience, but responses and stored results follow the canonical shape described below.
+- **Result schema:** The final evaluation result stored at `jobs.result` and returned by `GET /result/{id}` contains exactly the following user-facing fields:
+  * `cv_match_rate` — number between 0.00 and 1.00
+  * `cv_feedback` — short string feedback about the CV
+  * `project_score` — number on 1-5 scale (float)
+  * `project_feedback` — short string feedback about the project
+  * `overall_summary` — concise human-readable recommendation/summary
+  
 -----
 
 ## 🌟 Key Features
 
-  * **RESTful API Endpoints**:
+* **RESTful API Endpoints**:
       * `POST /upload`: Handles multipart file uploads (CV and Project Report) and returns unique document IDs.
-      * `POST /evaluate`: Triggers the non-blocking, asynchronous AI evaluation pipeline and immediately returns a job ID.
+      * `POST /evaluate`: Triggers the non-blocking, asynchronous AI evaluation pipeline and immediately returns a job ID. **Canonical request body fields:** `job_title`, `cv_id`, `project_id`.
       * `GET /result/{id}`: Retrieves the current status and the final structured result of an evaluation job.
   * **AI Evaluation Pipeline (LLM Chaining)**: A multi-stage process for evaluation, concluding with a final synthesis call:
     1.  **CV Evaluation**: Calculates `cv_match_rate` and provides `cv_feedback` based on the Job Description and CV Scoring Rubric.
@@ -35,81 +52,6 @@ Combination of **backend engineering** with **AI workflows**, including prompt d
 
 -----
 
-## 🚀 Setup and Running
-
-The required system documents are provided in the repository for full reproducibility.
-
-### Prerequisites
-
-  * Node.js (LTS)
-  * Docker (for running Redis and Qdrant locally)
-  * A **Gemini API Key** and/or **OpenRouter API Key**
-
-### 1\. Repository Clone & Install
-
-```bash
-git clone <repository-link>
-cd TalentSieve-RAG-Talent-Screener
-npm install
-```
-
-### 2\. Environment Setup
-
-Configure your environment variables in a `.env` file based on the provided `.env.example`:
-
-```bash
-# Example .env configuration
-LLM_API_KEY="<YOUR_GEMINI_API_KEY>"
-QDRANT_URL="http://localhost:6333"
-REDIS_HOST="localhost"
-REDIS_PORT=6379
-DATABASE_URL="postgresql://user:password@localhost:5432/talentsieve_db"
-```
-
-### 3\. Start Infrastructure (Docker)
-
-Use Docker Compose to launch the required services (Redis, Qdrant, PostgreSQL):
-
-```bash
-docker-compose up -d
-```
-
-### 4\. Database Migration
-
-Apply database schema migrations to set up the tables for file metadata and evaluation jobs:
-
-```bash
-# Example command using Prisma/TypeORM/etc.
-npx prisma migrate dev
-```
-
-### 5\. Document Ingestion (RAG Setup)
-
-Run the ingestion script to process and embed the system-internal documents (`Job Description`, `Case Study Brief`, `Scoring Rubrics`) into the **Qdrant** Vector Database:
-
-```bash
-node scripts/ingest_documents.js
-```
-
-### 6\. Start the Job Worker
-
-Start the **BullMQ** worker process to handle the long-running LLM chaining tasks:
-
-```bash
-node worker/bullmq_worker.js
-```
-
-### 7\. Start the Backend Service
-
-```bash
-node server.js
-# Or using a process manager for production: npm run start
-```
-
-The API will be available at `http://localhost:8000`.
-
------
-
 ## 💻 API Usage Examples (might change, not final)
 
 ### 1\. Upload Candidate Files
@@ -125,8 +67,8 @@ The API will be available at `http://localhost:8000`.
 
 ```json
 {
-  "cv_doc_id": "cv-d41d8cd98f00b204e9800998ecf8427e",
-  "report_doc_id": "report-b204e9800998ecf8427ed41d8cd98f00"
+  "cv_id": "cv-d41d8cd98f00b204e9800998ecf8427e",
+  "project_id": "project-b204e9800998ecf8427ed41d8cd98f00"
 }
 ```
 
@@ -139,11 +81,12 @@ The API will be available at `http://localhost:8000`.
 
 <!-- end list -->
 
+**Request (JSON):**
 ```json
 {
   "job_title": "Product Engineer (Backend)",
-  "cv_doc_id": "cv-d41d8cd98f00b204e9800998ecf8427e",
-  "report_doc_id": "report-b204e9800998ecf8427ed41d8cd98f00"
+  "cv_id": "cv-d41d8cd98f00b204e9800998ecf8427e",
+  "project_id": "project-b204e9800998ecf8427ed41d8cd98f00"
 }
 ```
 
@@ -151,6 +94,7 @@ The API will be available at `http://localhost:8000`.
 
 <!-- end list -->
 
+**Immediate Response (queued):**
 ```json
 {
   "id": "456",
@@ -178,6 +122,7 @@ The API will be available at `http://localhost:8000`.
 
 <!-- end list -->
 
+**Completed Result (`GET /result/456`):**
 ```json
 {
   "id": "456",
@@ -191,6 +136,111 @@ The API will be available at `http://localhost:8000`.
   }
 }
 ```
+
+## Contents (important files)
+
+- `src/` — application source
+  - `server.js` — Express API (upload, evaluate, result)
+  - `worker.js` — BullMQ worker process
+  - `pipeline.js` — main pipeline: parsing, embedding, upsert, retrieval, LLM scoring
+  - `lib/aiClient.js` — Gemini embedding & generation wrapper (DEMO mode available)
+  - `db.js` — Postgres connection pool
+  - `storage.js` — file helpers
+  - `validators/` — AJV schemas & validation helpers
+  - `fallback/` — heuristic scorers for safe fallback
+
+- `prompts/` — prompt templates and demo fixture
+
+- `migrations/` — SQL migrations up/down
+
+- `scripts/` — helper scripts: decode sample PDFs, run sample job, test embed
+
+- `docker-compose.yml` + `Dockerfile` — development infra & build
+
+- `tests/` — Jest tests and sample PDFs for CI/demo
+
+---
+
+## Quickstart (detailed)
+
+### Prerequisites
+- Node.js >= 18 (Node 20 LTS recommended)
+- Docker & Docker Compose (to run Redis, Postgres, Qdrant)
+- `psql` CLI (optional; migrations can be run inside Postgres container)
+- `jq` (optional, for demo script)
+
+### 1. Install dependencies
+```bash
+npm install
+```
+
+### 2. Create `.env`
+```bash
+cp .env.example .env
+# Edit .env: if you want demo mode runs keep DEMO_MODE=true.
+# For real runs set DEMO_MODE=false and set GEMINI_API_KEY.
+```
+
+### 3. Start infra & services (Docker Compose)
+```bash
+docker compose up --build -d
+```
+
+### 4. Run DB migrations (UP)
+
+Run migrations inside Postgres container (recommended):
+```bash
+docker compose exec postgres psql -U postgres -d talentsieve -f /app/migrations/up.sql
+```
+
+### 5. Decode sample PDFs (demo)
+```bash
+bash scripts/decode_sample_pdfs.sh
+```
+
+### 6. Start API & worker (if not using Docker to run them)
+```bash
+npm start       # starts API (http://localhost:3000)
+# in a second terminal:
+npm run worker  # starts BullMQ worker
+```
+
+### 7. Run sample job (demo)
+```bash
+bash scripts/run_sample_job.sh
+```
+
+scripts/run_sample_job.sh uses jq if available. If you don't have jq, the script will fall back to a small Node-based parser. For reliable output in terminal, install jq (sudo apt-get install -y jq or brew install jq).
+
+### 8. Test Gemini embedding (real API)
+To verify embedding size (useful to set `QDRANT_VECTOR_SIZE`):
+```bash
+export GEMINI_API_KEY="your_key_here"
+node scripts/test_embed.js
+```
+
+### 9. Run tests (CI)
+```bash
+npm test
+
+DEMO_MODE=true npm test #with demo mode
+```
+
+### 10. Revert migrations (DOWN)
+```bash
+docker compose exec postgres psql -U postgres -d postgres -f /app/migrations/down.sql
+```
+
+---
+
+## Troubleshooting: psql errors & port in use
+
+If `psql` complains about password or `-f`, run migrations inside the postgres container as shown above. If port 3000 is already in use, either stop the process using it or set `PORT` in `.env` and restart the app.
+
+---
+
+## Others
+You may adapt it to your environment. Ensure you remove any API keys before sharing publicly.
 
 ## ⚠️ Disclaimer
 The design, API, and anything here is still in development thus it all might change, and is not final.
